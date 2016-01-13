@@ -36,3 +36,60 @@ This breaks if, and only if, the following events happen in the following order:
 3. The `maven-compiler-plugin` starts, and in its mojo execution queries the `getTestClasspathElements` of the `module-a2` project. Since the resolved artifacts have been reset to the `compile` dependencies, this will result in a classpath without `junit:junit:4.12`, causing javac to fail.
 
 Due to this order, the sub-parent `sub-parent-b` has a `maven-javadoc-plugin` execution bound to the `test-compile` phase; increasing the chances of this problem occurring.
+
+## Suggested patch/fix for Maven
+
+If I understand the idea behing `MojoExecutor`'s `ensureDependenciesAreResolved` method correctly, I'm assuming it should call `resolveProjectDependencies` only on modules that are housed under the current project. In this sample project, I would expect this method to resolve the dependencies for the modules `module-b1` and `module-b2`, as these are child-modules of `sub-parent-b`.
+
+Currently, this method calls `resolveProjectDependencies` for all `MavenProject` instances returned by `MavenSession#getProjects`. Given the code; this method seems to return all projects included in the build reactor, which without any `--projects` argument boils down to all projects housed by the current parent.
+
+I would suggest (recursively) finding projects that are housed under the current project, and _only_ call `resolveProjectDependencies` for those projects.
+
+A diff for `MojoExecutor` that seems to result in this behaviour would be:
+```git
+diff --git a/maven-core/src/main/java/org/apache/maven/lifecycle/internal/MojoExecutor.java b/maven-core/src/main/java/org/apache/maven/life
+cycle/internal/MojoExecutor.java
+index 8524c5e..9dc3424 100644
+--- a/maven-core/src/main/java/org/apache/maven/lifecycle/internal/MojoExecutor.java
++++ b/maven-core/src/main/java/org/apache/maven/lifecycle/internal/MojoExecutor.java
+@@ -257,14 +257,11 @@ public void ensureDependenciesAreResolved( MojoDescriptor mojoDescriptor, MavenS
+ 
+             if ( dependencyContext.isResolutionRequiredForAggregatedProjects( scopesToCollect, scopesToResolve ) )
+             {
+-                for ( MavenProject aggregatedProject : session.getProjects() )
++                for ( MavenProject aggregatedProject : collectChildModules(project, session.getProjects()) )
+                 {
+-                    if ( aggregatedProject != project )
+-                    {
+-                        lifeCycleDependencyResolver.resolveProjectDependencies( aggregatedProject, scopesToCollect,
+-                                                                                scopesToResolve, session, aggregating,
+-                                                                                Collections.<Artifact>emptySet() );
+-                    }
++                    lifeCycleDependencyResolver.resolveProjectDependencies( aggregatedProject, scopesToCollect,
++                                                                            scopesToResolve, session, aggregating,
++                                                                            Collections.<Artifact>emptySet() );
+                 }
+             }
+         }
+@@ -279,6 +276,19 @@ public void ensureDependenciesAreResolved( MojoDescriptor mojoDescriptor, MavenS
+         }
+     }
+ 
++    private List<MavenProject> collectChildModules(MavenProject parent, List<MavenProject> projects) {
++        List<MavenProject> children = new ArrayList<>();
++        
++        for (MavenProject project : projects) {
++            if (project.getParent() == parent) {
++                children.add(project);
++                children.addAll(collectChildModules(project, projects));
++            }
++        }
++        
++        return children;
++    }
++    
+     private ArtifactFilter getArtifactFilter( MojoDescriptor mojoDescriptor )
+     {
+         String scopeToResolve = mojoDescriptor.getDependencyResolutionRequired();
+```
+
