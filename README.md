@@ -1,5 +1,5 @@
 # maven-mojo-jojo
-Repository with a small sample project illustrating a problem with Maven's MojoExecutor when building multi-threaded
+Repository with a small sample project illustrating a problem with Maven's MojoExecutor when building multi-threaded, reported in [MNG-5960](https://issues.apache.org/jira/browse/MNG-5960)
 
 ## Prerequisites
 * [Apache Maven 3](https://maven.apache.org/) (tested with 3.3.9 and 3.4.0-SNAPSHOT)
