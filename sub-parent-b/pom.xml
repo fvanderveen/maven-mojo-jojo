@@ -1,0 +1,58 @@
+<project 
+      xmlns="http://maven.apache.org/POM/4.0.0"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd"
+      >
+	<modelVersion>4.0.0</modelVersion>
+
+	<groupId>bugs.maven.b</groupId>
+	<artifactId>sub-parent-b</artifactId>
+
+	<parent>
+		<groupId>bugs.maven</groupId>
+		<artifactId>bug-parent</artifactId>
+		<version>1.0-SNAPSHOT</version>
+	</parent>
+
+	<packaging>pom</packaging>
+	
+	<name>Sub Parent B</name>
+
+	<modules>
+		<module>module-b1</module>
+		<module>module-b2</module>
+	</modules>
+	
+	<dependencies>
+		<!--
+			this dependency is here to force this parent and the module-a2 to be eligible
+			for building at the same time, allowing an even better timed window of opportunity
+		-->
+		<dependency>
+			<groupId>bugs.maven.a</groupId>
+			<artifactId>module-a1</artifactId>
+			<version>${project.version}</version>
+		</dependency>
+	</dependencies>
+	
+	<build>
+		<plugins>
+			<plugin>
+				<artifactId>maven-javadoc-plugin</artifactId>
+				<executions>
+					<execution>
+						<id>attempt-race-condition-from-b</id>
+						<goals>
+							<goal>aggregate</goal>
+						</goals>
+						<!--
+							This is a completely wrong phase for this plugin, but running it at this point has
+							a high chance of triggering the race-condition.
+						-->
+						<phase>test-compile</phase>
+					</execution>
+				</executions>
+			</plugin>
+		</plugins>
+	</build>
+</project>
